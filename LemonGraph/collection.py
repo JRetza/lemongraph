@@ -66,6 +66,7 @@ class StatusIndexer(Indexer):
 
 class StatusIndex(object):
     domain = 'status'
+    null = Serializer.null()
 
     def __init__(self, ctx):
         self.ctx = ctx
@@ -75,6 +76,7 @@ class StatusIndex(object):
     def update(self, uuid, old, new):
         oldkeys = self.indexer.index(old)
         newkeys = self.indexer.index(new)
+        uuid = uuid.encode()
         for name, crc in oldkeys.difference(newkeys):
             keys = self._index(name)
             try:
@@ -83,13 +85,13 @@ class StatusIndex(object):
                 pass
         for name, crc in newkeys.difference(oldkeys):
             keys = self._index(name)
-            keys.add(crc + uuid.encode())
+            keys.add(crc + uuid)
 
     def _index(self, idx):
         try:
             return self._indexes[idx]
         except KeyError:
-            self._indexes[idx] = self.ctx.txn.sset('lg.collection.idx.%s.%s' % (self.domain, idx))
+            self._indexes[idx] = self.ctx.txn.sset('lg.collection.idx.%s.%s' % (self.domain, idx), serialize_value=self.null)
         return self._indexes[idx]
 
     def search(self, idx, value):
@@ -100,7 +102,7 @@ class StatusIndex(object):
         except KeyError:
             return
         for key in index.iterpfx(pfx=crc):
-            uuid = key[crclen:]
+            uuid = key[crclen:].decode()
             status = self.ctx.statusDB[uuid]
             if check(status):
                 yield uuid, status
